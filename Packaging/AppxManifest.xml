@@ -4,13 +4,13 @@
          xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
          IgnorableNamespaces="uap rescap">
   <!-- Aşağıdaki 3 değeri Partner Center > Ürün kimliği sayfasından alıp değiştirin -->
-  <Identity Name="REPLACE_PACKAGE_IDENTITY_NAME"
-            Publisher="CN=REPLACE_PUBLISHER_ID"
+  <Identity Name="Placeholder.MailTemplater"
+            Publisher="CN=Placeholder"
             Version="1.0.0.0"
             ProcessorArchitecture="x64" />
   <Properties>
     <DisplayName>Mail Şablonları</DisplayName>
-    <PublisherDisplayName>REPLACE_PUBLISHER_DISPLAY_NAME</PublisherDisplayName>
+    <PublisherDisplayName>Placeholder Publisher</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   <Dependencies>
