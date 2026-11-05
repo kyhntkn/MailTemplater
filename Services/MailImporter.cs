@@ -50,12 +50,12 @@ public static class MailImporter
         t.Cc = J(m.Headers.Cc);
         t.Bcc = J(m.Headers.Bcc);
 
-        var html = m.FindFirstHtmlVersion()?.GetBodyAsText();
+        var html = m.HtmlBody?.GetBodyAsText();
         if (!string.IsNullOrWhiteSpace(html)) { t.Body = html; t.IsHtml = true; }
-        else t.Body = m.FindFirstPlainTextVersion()?.GetBodyAsText() ?? "";
+        else t.Body = m.TextBody?.GetBodyAsText() ?? "";
 
         foreach (var a in m.Attachments)
-            if (!a.IsInline && a.Body != null)
+            if (a.Body != null)
                 store.AddAttachmentBytes(t, a.FileName ?? "ek", a.Body);
     }
 }
