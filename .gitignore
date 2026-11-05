@@ -1,0 +1,7 @@
+bin/
+obj/
+publish/
+msix_stage/
+*.msix
+.vs/
+*.user
