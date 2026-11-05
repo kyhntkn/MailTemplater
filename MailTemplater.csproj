@@ -9,15 +9,9 @@
     <AssemblyName>MailTemplater</AssemblyName>
     <Version>1.0.0</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
-    <Resource Include="Assets\logo.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <Resource Include="Assets\app.ico" />
-  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MSGReader" Version="5.*" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.*" />
