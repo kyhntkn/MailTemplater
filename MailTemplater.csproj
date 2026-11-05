@@ -13,6 +13,7 @@
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
   </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="MSGReader" Version="5.*" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.*" />
   </ItemGroup>
