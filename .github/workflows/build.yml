@@ -1,0 +1,60 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Publish (tek dosya .exe)
+        run: >
+          dotnet publish MailTemplater.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: MailTemplater-exe
+          path: publish/MailTemplater.exe
+
+      - name: MSIX paketi oluştur (Store yüklemesi için)
+        shell: pwsh
+        run: |
+          $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\makeappx.exe" |
+                      Sort-Object FullName -Descending | Select-Object -First 1
+          New-Item -ItemType Directory -Force msix_stage | Out-Null
+          Copy-Item publish\MailTemplater.exe msix_stage\
+          Copy-Item Assets msix_stage\Assets -Recurse
+          Remove-Item msix_stage\Assets\app.ico, msix_stage\Assets\logo-1024.png -ErrorAction SilentlyContinue
+          Copy-Item Packaging\AppxManifest.xml msix_stage\
+          & $makeappx.FullName pack /d msix_stage /p MailTemplater.msix /o
+          if ($LASTEXITCODE -ne 0) { throw "makeappx basarisiz" }
+
+      - name: Upload msix
+        uses: actions/upload-artifact@v4
+        with:
+          name: MailTemplater-msix
+          path: MailTemplater.msix
+
+      - name: GitHub Release (v* etiketinde)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            publish/MailTemplater.exe
+            MailTemplater.msix
