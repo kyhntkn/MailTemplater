@@ -3,14 +3,14 @@
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
          xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
          IgnorableNamespaces="uap rescap">
-  <!-- Aşağıdaki 3 değeri Partner Center > Ürün kimliği sayfasından alıp değiştirin -->
-  <Identity Name="Placeholder.MailTemplater"
-            Publisher="CN=Placeholder"
+  <!-- Değerler Partner Center > Product identity sayfasından alınmıştır -->
+  <Identity Name="KayhanTEKN.MailTemplater"
+            Publisher="CN=A94C9337-5C18-44C3-9DCE-433C130AD6A2"
             Version="1.0.0.0"
             ProcessorArchitecture="x64" />
   <Properties>
-    <DisplayName>Mail Şablonları</DisplayName>
-    <PublisherDisplayName>Placeholder Publisher</PublisherDisplayName>
+    <DisplayName>Mail Templater</DisplayName>
+    <PublisherDisplayName>Kayhan TEKİN</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   <Dependencies>
@@ -22,7 +22,7 @@
   </Resources>
   <Applications>
     <Application Id="App" Executable="MailTemplater.exe" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="Mail Şablonları"
+      <uap:VisualElements DisplayName="Mail Templater"
                           Description="Mailleri şablon olarak kaydedip Outlook'ta otomatik doldurur."
                           BackgroundColor="transparent"
                           Square150x150Logo="Assets\Square150x150Logo.png"
