@@ -20,7 +20,7 @@ public static class MailImporter
     private static void ReadMsg(string path, MailTemplate t, TemplateStore store)
     {
         using var msg = new Storage.Message(path);
-        t.Subject = msg.Subject ?? "";
+        t.Subject = TextFix.Clean(msg.Subject);
 
         string Join(RecipientType type) => string.Join("; ",
             msg.Recipients.Where(r => r.Type == type)
@@ -31,7 +31,7 @@ public static class MailImporter
         t.Cc = Join(RecipientType.Cc);
         t.Bcc = Join(RecipientType.Bcc);
 
-        if (!string.IsNullOrWhiteSpace(msg.BodyHtml)) { t.Body = msg.BodyHtml; t.IsHtml = true; }
+        if (!string.IsNullOrWhiteSpace(msg.BodyHtml)) { t.Body = TextFix.NormalizeHtmlCharset(msg.BodyHtml); t.IsHtml = true; }
         else t.Body = msg.BodyText ?? "";
 
         foreach (var o in msg.Attachments)
@@ -45,13 +45,13 @@ public static class MailImporter
         string J(IEnumerable<MsgReader.Mime.Header.RfcMailAddress>? l) =>
             l == null ? "" : string.Join("; ", l.Select(a => a.Address).Where(s => !string.IsNullOrWhiteSpace(s)));
 
-        t.Subject = m.Headers.Subject ?? "";
+        t.Subject = TextFix.Clean(m.Headers.Subject);
         t.To = J(m.Headers.To);
         t.Cc = J(m.Headers.Cc);
         t.Bcc = J(m.Headers.Bcc);
 
         var html = m.HtmlBody?.GetBodyAsText();
-        if (!string.IsNullOrWhiteSpace(html)) { t.Body = html; t.IsHtml = true; }
+        if (!string.IsNullOrWhiteSpace(html)) { t.Body = TextFix.NormalizeHtmlCharset(html); t.IsHtml = true; }
         else t.Body = m.TextBody?.GetBodyAsText() ?? "";
 
         foreach (var a in m.Attachments)
