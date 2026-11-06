@@ -1,5 +1,9 @@
+using System.Net;
 using System.Text;
+using System.Text.Json;
+using Microsoft.Web.WebView2.Core;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Controls;
 using MailTemplater.Models;
 using MailTemplater.Services;
@@ -13,6 +17,8 @@ public partial class MainWindow : Window
     private List<MailTemplate> _templates;
     private MailTemplate? _cur;
     private bool _loading;
+    private bool _webViewOk;
+    private bool _previewDirty;
 
     public MainWindow()
     {
@@ -20,6 +26,107 @@ public partial class MainWindow : Window
         _templates = _store.Load();
         ClientIdBox.Text = _store.LoadSettings().GraphClientId;
         RefreshList();
+        Loaded += async (_, _) => await InitPreviewAsync();
+    }
+
+    // ---------- Önizleme ----------
+    private async Task InitPreviewAsync()
+    {
+        try
+        {
+            var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(_store.Root, "WebView2"));
+            await Preview.EnsureCoreWebView2Async(env);
+            // Düzenleme için script gerekir; mail içeriğindeki script'ler UpdatePreview'da temizlenir.
+            Preview.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+            Preview.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            Preview.CoreWebView2.WebMessageReceived += (_, _) => _previewDirty = true;
+            Preview.CoreWebView2.NavigationCompleted += async (_, _) =>
+            {
+                try
+                {
+                    await Preview.CoreWebView2.ExecuteScriptAsync(
+                        "document.designMode='on';document.addEventListener('input',function(){window.chrome.webview.postMessage('d');});");
+                }
+                catch { }
+            };
+            Preview.CoreWebView2.NavigationStarting += (_, e) =>
+            { if (!e.Uri.StartsWith("data:") && e.Uri != "about:blank") e.Cancel = true; };
+            Preview.CoreWebView2.NewWindowRequested += (_, e) => e.Handled = true;
+            _webViewOk = true;
+            UpdatePreview();
+        }
+        catch { _webViewOk = false; BodyTabs.SelectedIndex = 1; }
+    }
+
+    private void UpdatePreview()
+    {
+        if (!_webViewOk) return;
+        try
+        {
+            var html = HtmlCheck.IsChecked == true
+                ? BodyBox.Text
+                : "<pre style=\"font-family:Segoe UI,sans-serif;white-space:pre-wrap\">" + WebUtility.HtmlEncode(BodyBox.Text) + "</pre>";
+            _previewDirty = false;
+            Preview.NavigateToString(string.IsNullOrEmpty(html) ? "<html></html>" : HtmlToText.StripScripts(html));
+        }
+        catch { }
+    }
+
+    private async void BodyTabs_SelectionChanged(object s, SelectionChangedEventArgs e)
+    {
+        if (e.Source != BodyTabs) return;
+        if (BodyTabs.SelectedIndex == 0) UpdatePreview();
+        else await SyncFromPreviewAsync();
+    }
+
+    /// <summary>Önizlemede yapılan düzenlemeyi içerik kutusuna geri yazar.</summary>
+    private async Task SyncFromPreviewAsync()
+    {
+        if (!_webViewOk || !_previewDirty) return;
+        try
+        {
+            bool html = HtmlCheck.IsChecked == true;
+            var json = await Preview.CoreWebView2.ExecuteScriptAsync(
+                html ? "document.documentElement.outerHTML" : "document.body.innerText");
+            var text = JsonSerializer.Deserialize<string>(json) ?? "";
+            BodyBox.Text = html ? "<!DOCTYPE html>\n" + text : text;
+            _previewDirty = false;
+        }
+        catch { }
+    }
+
+    private async Task PrepareAsync()
+    {
+        await SyncFromPreviewAsync();
+        FormToModel();
+    }
+
+    private async Task FormatAsync(string cmd)
+    {
+        if (!_webViewOk || BodyTabs.SelectedIndex != 0) return;
+        if (HtmlCheck.IsChecked != true)
+        {
+            MessageBox.Show("Biçimlendirme için önce 'İçerik HTML' kutusunu işaretleyin.");
+            return;
+        }
+        await Preview.CoreWebView2.ExecuteScriptAsync($"document.execCommand('{cmd}')");
+        _previewDirty = true;
+    }
+
+    private async void Bold_Click(object s, RoutedEventArgs e) => await FormatAsync("bold");
+    private async void Italic_Click(object s, RoutedEventArgs e) => await FormatAsync("italic");
+    private async void Underline_Click(object s, RoutedEventArgs e) => await FormatAsync("underline");
+
+    private async void ToPlain_Click(object s, RoutedEventArgs e)
+    {
+        await SyncFromPreviewAsync();
+        if (HtmlCheck.IsChecked == true &&
+            MessageBox.Show("HTML biçimlendirme (renk, tablo, resim vb.) kaybolur ve içerik düz metin olur. Devam edilsin mi?",
+                            "Onay", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        BodyBox.Text = HtmlToText.Convert(BodyBox.Text);
+        HtmlCheck.IsChecked = false;
+        BodyTabs.SelectedIndex = 1;
+        UpdatePreview();
     }
 
     // ---------- Liste / form ----------
@@ -36,11 +143,14 @@ public partial class MainWindow : Window
     private void LoadToForm(MailTemplate? t)
     {
         _cur = t;
+        _previewDirty = false;
         NameBox.Text = t?.Name ?? ""; ToBox.Text = t?.To ?? ""; CcBox.Text = t?.Cc ?? "";
         BccBox.Text = t?.Bcc ?? ""; SubjectBox.Text = t?.Subject ?? ""; BodyBox.Text = t?.Body ?? "";
         HtmlCheck.IsChecked = t?.IsHtml ?? false;
         AttachList.ItemsSource = null;
         AttachList.ItemsSource = t?.Attachments;
+        BodyTabs.SelectedIndex = (t?.IsHtml ?? false) ? 0 : 1;
+        UpdatePreview();
     }
 
     private void FormToModel()
@@ -65,10 +175,10 @@ public partial class MainWindow : Window
         RefreshList(t);
     }
 
-    private void Save_Click(object s, RoutedEventArgs e)
+    private async void Save_Click(object s, RoutedEventArgs e)
     {
         if (_cur == null) { MessageBox.Show("Önce bir şablon seçin veya oluşturun."); return; }
-        FormToModel();
+        await PrepareAsync();
         _store.Save(_templates);
         RefreshList(_cur);
     }
@@ -84,27 +194,46 @@ public partial class MainWindow : Window
     }
 
     // ---------- Ekler ----------
-    private void AddAttach_Click(object s, RoutedEventArgs e)
+    private async void AddAttach_Click(object s, RoutedEventArgs e)
     {
         if (_cur == null) return;
         var dlg = new OpenFileDialog { Multiselect = true };
         if (dlg.ShowDialog() != true) return;
         foreach (var f in dlg.FileNames) _store.AddAttachmentFile(_cur, f);
-        FormToModel(); _store.Save(_templates); LoadToForm(_cur);
+        await PrepareAsync(); _store.Save(_templates); LoadToForm(_cur);
     }
 
-    private void RemoveAttach_Click(object s, RoutedEventArgs e)
+    private async void RemoveAttach_Click(object s, RoutedEventArgs e)
     {
         if (_cur == null || AttachList.SelectedItem is not string name) return;
         _store.RemoveAttachment(_cur, name);
-        FormToModel(); _store.Save(_templates); LoadToForm(_cur);
+        await PrepareAsync(); _store.Save(_templates); LoadToForm(_cur);
     }
 
     // ---------- Sürükle-bırak ----------
-    private void DropZone_DragEnter(object s, DragEventArgs e) => e.Effects = DragDropEffects.Copy;
+    private void DropZone_DragEnter(object s, DragEventArgs e)
+    {
+        e.Effects = DragDropEffects.Copy;
+        SetDropHighlight(true);
+    }
+
+    private void DropZone_DragOver(object s, DragEventArgs e)
+    {
+        e.Effects = DragDropEffects.Copy;
+        e.Handled = true;
+    }
+
+    private void DropZone_DragLeave(object s, DragEventArgs e) => SetDropHighlight(false);
+
+    private void SetDropHighlight(bool on)
+    {
+        DropZone.Background = (Brush)FindResource(on ? "DropActiveBrush" : "DropIdleBrush");
+        DropOutline.Stroke = (Brush)FindResource(on ? "OutlineActiveBrush" : "OutlineIdleBrush");
+    }
 
     private void DropZone_Drop(object s, DragEventArgs e)
     {
+        SetDropHighlight(false);
         string? path = null;
         bool temp = false;
         try
@@ -159,10 +288,10 @@ public partial class MainWindow : Window
     }
 
     // ---------- Outlook'ta açma ----------
-    private void OpenClassic_Click(object s, RoutedEventArgs e)
+    private async void OpenClassic_Click(object s, RoutedEventArgs e)
     {
         if (_cur == null) return;
-        try { FormToModel(); _store.Save(_templates); OutlookClassicLauncher.Open(_cur, _store); }
+        try { await PrepareAsync(); _store.Save(_templates); OutlookClassicLauncher.Open(_cur, _store); }
         catch (Exception ex) { MessageBox.Show(ex.Message); }
     }
 
@@ -171,7 +300,7 @@ public partial class MainWindow : Window
         if (_cur == null) return;
         try
         {
-            FormToModel(); _store.Save(_templates);
+            await PrepareAsync(); _store.Save(_templates);
             await GraphLauncher.OpenAsync(_cur, _store, ClientIdBox.Text.Trim());
         }
         catch (Exception ex) { MessageBox.Show(ex.Message); }
